@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# That script will be executed on a VM as a root user.
-# We are using here variables provided by the templatefile Terraform function:
+# That script will be executed on a VM as a root user. It will be at first rendered using the Terraform templatefile function.
+# We are using here variables provided by that function:
 # - username
 # - hostnames
 # - host_entries
@@ -42,7 +42,6 @@ echo "Done."
 
 mkdir -p /home/${username}/.ssh # Create the .ssh directory if it doesn't exists
 chmod 700 /home/${username}/.ssh # Set correct permissions
-chown -R ${username}:${username} /home/${username}/.ssh # Assign the ${username} user as the owner of the .ssh folder.
 
 # File to store the private key
 KEY_FILE="/home/${username}/.ssh/id_rsa"
@@ -51,6 +50,7 @@ echo "Creating SSH key file..."
 echo "${ssh_private_key}" >> "$KEY_FILE" # Save the SSH private key to the file
 
 chmod 600 "$KEY_FILE" # Set correct permissions for that file.
+chown -R ${username}:${username} /home/${username}/.ssh # Assign the ${username} user as the owner of the .ssh folder.
 
 echo "SSH private key saved to $KEY_FILE with restricted permissions."
 
@@ -61,15 +61,18 @@ echo "${ssh_public_key}" >> /home/${username}/.ssh/authorized_keys
 
 # === Section 3: Install Java ===
 
-sudo apt-get update
-sudo apt-get install openjdk-8-jdk -y
+apt-get update
+apt-get install openjdk-8-jdk -y
 
 
-# === Section 4: Download hadoop and extract it to the /home/${username}/hadoop
+# === Section 4: Download Hadoop and Spark. Save both in the /home/${username}/hadoop and /home/${username}/spark respectively. ===
 
-sudo apt-get install curl
-curl -L https://archive.apache.org/dist/hadoop/common/hadoop-3.1.2/hadoop-3.1.2.tar.gz | tar -xz -C /home/${username}
-mv /home/${username}/hadoop-3.1.2 /home/${username}/hadoop
+apt-get install curl
+curl -L https://archive.apache.org/dist/hadoop/common/hadoop-3.3.6/hadoop-3.3.6.tar.gz | tar -xz -C /home/${username}
+mv /home/${username}/hadoop-3.3.6 /home/${username}/hadoop
+
+curl -L https://archive.apache.org/dist/spark/spark-3.4.4/spark-3.4.4-bin-hadoop3.tgz | tar -xz -C /home/${username}
+mv /home/${username}/spark-3.4.4-bin-hadoop3 /home/${username}/spark
 
 
 # === Section 5: Modify the .bashrc file. We will define there environment variables needed for Hadoop. ===
@@ -77,18 +80,25 @@ mv /home/${username}/hadoop-3.1.2 /home/${username}/hadoop
 # add all the below lines to the .bashrc file
 cat << 'EOF' >> /home/${username}/.bashrc
 export HADOOP_HOME="/home/${username}/hadoop"
+export SPARK_HOME="/home/${username}/spark"
+export HADOOP_CONF_DIR="$HADOOP_HOME/etc/hadoop" # This is needed in order to use Spark shell using this command: 'spark-shell --master yarn'
 export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
 export PATH=$PATH:$HADOOP_HOME/bin
 export PATH=$PATH:$HADOOP_HOME/sbin
+export PATH=$PATH:$SPARK_HOME/bin
 export MAPRED_HOME=$${HADOOP_HOME}
 export HDFS_HOME=$${HADOOP_HOME}
 EOF
 
 
-# === Section 6: Modify the hadoop-env.sh and yarn-env.sh files. Add value for the JAVA_HOME environment variable. ===
+# === Section 6: Modify the hadoop-env.sh, yarn-env.sh and spark-env.sh files. Add value for the JAVA_HOME environment variable. ===
 
-echo "export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64" >> /home/${username}/hadoop/etc/hadoop/hadoop-env.sh
-echo "export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64" >> /home/${username}/hadoop/etc/hadoop/yarn-env.sh
+echo "export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64" >> $HADOOP_HOME/etc/hadoop/hadoop-env.sh
+echo "export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64" >> $HADOOP_HOME/etc/hadoop/yarn-env.sh
+
+cp $SPARK_HOME/conf/spark-env.sh.template $SPARK_HOME/conf/spark-env.sh
+echo "export SPARK_WORKER_CORES=12" >> $SPARK_HOME/conf/spark-env.sh
+echo "export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64" >> $SPARK_HOME/conf/spark-env.sh
 
 
 # === Section 7: Modify the core-site.xml file ===
@@ -100,14 +110,14 @@ echo "export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64" >> /home/${username}/h
 # We have here 3 arguments: 'pattern', 'sentence' and 'file_path'.
 # It is finding a string matching the 'pattern' argument in the file at the path specified by the file_path. Then it 
 # inserts a string specified by the 'sentence' argument right before that found matched string. So in that case 
-# we are finding the '</configuration>' string in the /home/${username}/hadoop/etc/hadoop/core-site.xml file 
+# we are finding the '</configuration>' string in the $HADOOP_HOME/etc/hadoop/core-site.xml file 
 # and inserting all the properties right before it.
 sed -i "/<\/configuration>/i \
   <!-- URI of the HDFS NameNode -->\n\
   <property>\n\
     <name>fs.defaultFS</name>\n\
     <value>hdfs://$hadoop_master_hostname:9000</value>\n\
-  </property>" /home/${username}/hadoop/etc/hadoop/core-site.xml
+  </property>" $HADOOP_HOME/etc/hadoop/core-site.xml
 
 
 # === Section 8: Modify the hdfs-site.xml file ===
@@ -124,7 +134,7 @@ sed -i "/<\/configuration>/i \
   <property>\n\
     <name>dfs.namenode.name.dir</name>\n\
     <value>file:///home/${username}/hdfs/namenode</value>\n\
-  </property>" /home/${username}/hadoop/etc/hadoop/hdfs-site.xml
+  </property>" $HADOOP_HOME/etc/hadoop/hdfs-site.xml
 
 
 
@@ -141,13 +151,13 @@ sed -i "/<\/configuration>/i \n\
   <!-- Define where local data should be stored for NodeManager -->\n\
   <property>\n\
       <name>yarn.nodemanager.local-dirs</name>\n\
-      <value>/home/${username}/hadoop/yarn/local</value>\n\
+      <value>$HADOOP_HOME/yarn/local</value>\n\
   </property>\n\
   \n\
   <!-- Define log directory for containers -->\n\
   <property>\n\
       <name>yarn.nodemanager.log-dirs</name>\n\
-      <value>/home/${username}/hadoop/yarn/logs</value>\n\
+      <value>$HADOOP_HOME/yarn/logs</value>\n\
   </property>\n\
   \n\
   <!-- Use HDFS for auxiliary services like shuffle for MapReduce -->\n\
@@ -160,21 +170,28 @@ sed -i "/<\/configuration>/i \n\
   <property>\n\
       <name>yarn.nodemanager.aux-services.mapreduce.shuffle.class</name>\n\
       <value>org.apache.hadoop.mapred.ShuffleHandler</value>\n\
-  </property>" /home/${username}/hadoop/etc/hadoop/yarn-site.xml
+  </property>" $HADOOP_HOME/etc/hadoop/yarn-site.xml
 
 
 # === Section 10: Create the masters and workers files. ===
 
-echo "$hadoop_master_hostname" > /home/${username}/hadoop/etc/hadoop/masters
-echo "$hadoop_slave_hostname" > /home/${username}/hadoop/etc/hadoop/workers
+echo "$hadoop_master_hostname" > $HADOOP_HOME/etc/hadoop/masters
+echo "$hadoop_slave_hostname" > $HADOOP_HOME/etc/hadoop/workers
 
 
 # === Section 11: Create needed folders and grant permissions for them to the Hadoop user (which will be running Hadoop commands). ===
 
 # Hadoop will be using the Hadoop user in order to modify files in the below folders. That's why we need to create them
 # and grant proper permissions to that Hadoop user.
-mkdir -p /home/${username}/hadoop/logs # folder needed for Hadoop logs
+mkdir -p $HADOOP_HOME/logs # folder needed for Hadoop logs
 mkdir -p /usr/local/hadoop
 # Assign the $username as the owner of both folders so that user can create new folders there
-chown -R ${username}:${username} /home/${username}/hadoop
+chown -R ${username}:${username} $HADOOP_HOME
 chown -R ${username}:${username} /usr/local/hadoop
+
+
+# Section 12: Modify the $SPARK_HOME/conf/workers file. ===
+
+cp $SPARK_HOME/conf/workers.template $SPARK_HOME/conf/workers
+echo -e "\nhadoopslave-1" >> $SPARK_HOME/conf/workers
+
