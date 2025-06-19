@@ -20,13 +20,16 @@ In order to destroy all the created resources in Azure we need to run the follow
 
 ## Starting Hadoop cluster
 In order to start the Hadoop cluster we need to connect through SSH to the VM which acts as a master (VM1 by default) and run the following commands:
-- hdfs namenode -format
-- start-dfs.sh
-- start-yarn.sh
+- hdfs namenode -format # We need to run this only when starting Hadoop cluster for the first time. If we run this later on it will remove all the data from the cluster.
+- start-dfs.sh # Start HDFS
+- start-yarn.sh # Start YARN
 
-In order to learn about how to connect to that VM through SSH reference to the 'SSH' section below in this documentation.
+In order to learn about how to connect to that VM through SSH reference to the 'Connecting to the created VMs from our local computer through SSH' section below in this documentation.
 
 # Prerequisites
+## Terraform variables
+We need to specify values for Terraform variables. In order to do that we need to create the terraform.tfvars file which looks like the terraform-draft.tfvars and provide there proper values for all the listed variables.
+
 ## Terraform configuration
 We need to configure properly Terraform so it can create resources in our Azure subscription, it is described here: [developer.hashicorp.com](https://developer.hashicorp.com/terraform/tutorials/azure-get-started/azure-build).
 
@@ -47,7 +50,7 @@ We need to have a subscription on the Azure platform portal.azure.com.
 # Code description
 In the below sections we can find more details about how the code works.
 
-## SSH
+## Connecting to the created VMs from our local computer through SSH
 The Terraform code will generate SSH keys pair, save the private key on our local computer and add the public key to the authorized keys on the created VMs.
 
 Then we can connect to the created VMs by using this command on our local computer:
@@ -58,56 +61,66 @@ Here is described how to get values needed for SSH connection:
 	>terraform output
 - **username**- The username value is the same as the one defined in the terraform.tfvars file for the vm_username variable.
 
-The ssh_path variable specifies where on our local computer the private key will be saved. The recommended one for Windows is C:\\Users\\username\\.ssh\\id_rsa. 
+The ssh_path Terraform variable specifies where on our local computer the private key will be saved. The recommended one for Windows is C:\\Users\\username\\.ssh\\id_rsa (if we save the private key here then we don't need to provide a path to that key when running the 'ssh' command).
 
-For generating SSH keys we are using the modules/ssh module. We create two SSH key pairs for connection:
-- Between our local computer and both VMs 
-- From one VM to another (what is needed for Hadoop)
+We are using the modules/ssh module which generates SSH keys as strings which are saved on our local computer and created VMs.
 
-That module generates SSH keys as strings which we can save on our local computer and created VMs.
+## Executing bash scripts on VMs
+After creating VMs using Terraform we are executing on them bash scripts using the azurerm_virtual_machine_extension Terraform resource which uses Azure VM Extension.
 
-## Hadoop setup (new)
+Those bash scripts are used to configure both VMs for running Hadoop.
+
+## Hadoop setup
 We are setting up Hadoop on two VMs:
 - **VM1** - Which acts as a master node
 - **VM2** - Which acts as a slave node
 
-We are setting up Hadoop by executing bash scripts on both VMs which will download and configure all the necessary files, set up passwordless SSH connection from one VM (master node) to another (slave node) and created all the necessary folders and grant proper permissions to the hadoop user.
+On both VMs we are creating a Hadoop user which will be executing Hadoop commands and which will have proper permissions to folders.
 
-At first we are using the azurerm_virtual_machine_extension Terraform resource which uses Azure VM Extension in order to run a bash script on both VMs which sets up a passwordless SSH connection from VM1 (master node) to VM2 (slave node) and configure Hadoop files on VM1.
+We are setting up Hadoop by executing bash scripts on both VMs (using the azurerm_virtual_machine_extension) which will download and configure all the necessary files, set up passwordless SSH connection from one VM (master node) to another (slave node) and create all the necessary folders, and grant proper permissions to the Hadoop user for those folders.
 
-Then we can start the hadoop cluster.
+Then we can start manually the hadoop cluster as described earlier in the 'Repository guide > Starting Hadoop cluster' section of this documentation.
+
+### Hadoop processes
+Below is described which processes we will be running on which nodes.
+
+Processes running on the Master Node:
+- SecondaryNameNode
+- ResourceManager
+- NameNode
+
+Processes running on the Slave Node:
+- DataNode
+- NodeManager
 
 ### SSH setup
 We need to have:
 - SSH private key saved on VM1
 - SSH public key added to the authorized_keys on both VM1 and VM2
 
-Hadoop needs to be able to connect from VM1 through SSH to the localhost and also to VM2.
+Hadoop needs to be able to connect from VM1 through SSH to the localhost and also to VM2. That SSH key pair will be generated by Terraform. Then on both VMs we will execute bash scripts (using the azurerm_virtual_machine_extension) which will save the private key on the VM1 and add the public key to the authorized keys on both VMs.
 
 ### Hadoop config files setup
-We are executing two bash scripts from the bash_scripts folder using the azurerm_virtual_machine_extension Terraform resource:
+We are executing two bash scripts from the bash_scripts folder (using the azurerm_virtual_machine_extension):
 - **vm1/configure_hadoop.tftpl** - It is executed on the VM1. It performs the following actions:
 	- Edit /etc/hosts file - It assigns the hostnames of both VMs specified by the Terraform variable hostnames to the private IP addresses of both VMs.
 	- Save the SSH private key - That key was generated by Terraform. It will be used for connection from VM1 to VM2.
-	- Add the SSH public key to the authorized_keys - That is the key matching the private key mentioned in the previous step. \
-		It will be used for connecting from VM1 to the localhost.
+	- Add the SSH public key to the authorized_keys - That is the key matching the private key mentioned in the previous step. It will be used for connecting from VM1 to the localhost.
 	- Install Java
 	- Download Hadoop files
 	- Modify .bashrc file - Specify there proper environment variables required by Hadoop.
 	- Modify Hadoop files:
-		- Hadoop-env.sh
+		- hadoop-env.sh
 		- core-site.xml
 		- hdfs-site.xml
 		- yarn-site.xml
 		- hadoop/etc/hadoop/masters
 		- hadoop/etc/hadoop/workers
-	- Create required folders and assign proper permissions to the hadoop user for those folders - That's needed because Hadoop will be using the \
-		Hadoop user in order to modify those folders. Hadoop user is a user which is running Hadoop commands (in our case specified by the vm_username \
-		Terraform variable).
-- **vm2/configure_hadoop.tftpl** - It is executed on the VM2. It performs almost the same actions as the script executed on the VM1. \
-The only differences are as follows:
+	- Create required folders and assign proper permissions to the Hadoop user for those folders - That's needed because Hadoop will be using the Hadoop user in order to modify
+		those folders.
+- **vm2/configure_hadoop.tftpl** - It is executed on the VM2. It performs almost the same actions as the script executed on the VM1. The only differences are as follows:
 	- We don't save here the SSH private key. We only add the public key to the authorized keys so the VM1 can connect to the VM2.
-	- In the hdfs-site.xml file instead of adding the dfs.namenode.name.dir property we are adding the dfs.datanode.data.dir. That's because \
-		We want to run a name node on the master node and data node on the slave node.
+	- In the hdfs-site.xml file instead of adding the dfs.namenode.name.dir property we are adding the dfs.datanode.data.dir. That's because We want to run a name node process 
+		only on the master node and a data node process only on the slave node.
 	- We don't create the masters and workers files.
 	- We create and assing permissions to different folders.

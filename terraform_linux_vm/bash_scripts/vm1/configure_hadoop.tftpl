@@ -4,22 +4,23 @@
 # We are using here variables provided by the templatefile Terraform function:
 # - username
 # - hostnames
-# - hosts_entries
-# - ssh_private_key - SSH key used for connecting from VM1 to VM2
-# - ssh_public_key - SSH key used for connecting from VM1 to VM2
+# - host_entries
+# - ssh_private_key - SSH key used for connecting from VM1 to VM2 and from VM1 to the localhost
+# - ssh_public_key - SSH key used for connecting from VM1 to VM2 and from VM1 to the localhost
 
+# hostnames of both VMs
 hostnames=( %{ for entry in hostnames ~} "${entry}" %{ endfor ~} )
 hadoop_master_hostname=$${hostnames[0]}
 hadoop_slave_hostname=$${hostnames[1]}
 
 
-# === Section 1: Assign given hosts names to the given IP addresses. ===
+# === Section 1: Assign given hostnames to the private IP addresses of both VMs. ===
 
 HOSTS_FILE="/etc/hosts"
 
 echo "Adding entries to $HOSTS_FILE..."
 
-# Entries to add to the /etc/hosts, that is lines mapping hosts names to IP addresses.
+# Entries to add to the /etc/hosts, that is lines mapping hostnames to IP addresses.
 hosts_entries=( %{ for entry in host_entries ~} "${entry}" %{ endfor ~} )
 
 for entry in "$${hosts_entries[@]}"; do
@@ -27,6 +28,7 @@ for entry in "$${hosts_entries[@]}"; do
   if grep -q "$entry" "$HOSTS_FILE"; then
     echo "Entry '$entry' already exists. Skipping."
   else
+    # add entry to the hosts file
     echo "$entry" >> "$HOSTS_FILE"
     echo "Added: $entry"
   fi
@@ -36,21 +38,19 @@ echo "Done."
 
 
 
-# === Section 2: Saving a SSH private key which will be used for connecting to the VM2 ===
+# === Section 2: Saving a SSH private key which will be used by Hadoop (and us) for connecting to the VM2 ===
 
 mkdir -p /home/${username}/.ssh # Create the .ssh directory if it doesn't exists
 chmod 700 /home/${username}/.ssh # Set correct permissions
+chown -R ${username}:${username} /home/${username}/.ssh # Assign the ${username} user as the owner of the .ssh folder.
 
 # File to store the private key
 KEY_FILE="/home/${username}/.ssh/id_rsa"
 
-# Create the file and write the key
 echo "Creating SSH key file..."
-echo "${ssh_private_key}" >> "$KEY_FILE"
+echo "${ssh_private_key}" >> "$KEY_FILE" # Save the SSH private key to the file
 
-chmod 600 "$KEY_FILE" # Set correct permissions
-# Assign the ${username} user as the owner of the .ssh folder and all the files inside of it.
-chown -R ${username}:${username} /home/${username}/.ssh
+chmod 600 "$KEY_FILE" # Set correct permissions for that file.
 
 echo "SSH private key saved to $KEY_FILE with restricted permissions."
 
@@ -72,7 +72,7 @@ curl -L https://archive.apache.org/dist/hadoop/common/hadoop-3.1.2/hadoop-3.1.2.
 mv /home/${username}/hadoop-3.1.2 /home/${username}/hadoop
 
 
-# === Section 5: Modify the .bashrc file ===
+# === Section 5: Modify the .bashrc file. We will define there environment variables needed for Hadoop. ===
 
 # add all the below lines to the .bashrc file
 cat << 'EOF' >> /home/${username}/.bashrc
@@ -85,7 +85,7 @@ export HDFS_HOME=$${HADOOP_HOME}
 EOF
 
 
-# === Section 6: Modify the hadoop-env.sh and yarn-env.sh files. Add value for the JAVA_HOME environment variable
+# === Section 6: Modify the hadoop-env.sh and yarn-env.sh files. Add value for the JAVA_HOME environment variable. ===
 
 echo "export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64" >> /home/${username}/hadoop/etc/hadoop/hadoop-env.sh
 echo "export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64" >> /home/${username}/hadoop/etc/hadoop/yarn-env.sh
@@ -97,6 +97,7 @@ echo "export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64" >> /home/${username}/h
 
 # We are using here syntax: 
 # > sed -i '/pattern/i sentence' file_path
+# We have here 3 arguments: 'pattern', 'sentence' and 'file_path'.
 # It is finding a string matching the 'pattern' argument in the file at the path specified by the file_path. Then it 
 # inserts a string specified by the 'sentence' argument right before that found matched string. So in that case 
 # we are finding the '</configuration>' string in the /home/${username}/hadoop/etc/hadoop/core-site.xml file 
@@ -119,7 +120,7 @@ sed -i "/<\/configuration>/i \
       <value>2</value>\n\
     </property>\n\
   \n\
-  <!-- Namenode Directory. This is set up only on a Master Node. -->\n\
+  <!-- Namenode Directory. This is set up only on the node (Master Node in this case) where we will be running a NameNode. -->\n\
   <property>\n\
     <name>dfs.namenode.name.dir</name>\n\
     <value>file:///home/${username}/hdfs/namenode</value>\n\
@@ -127,7 +128,7 @@ sed -i "/<\/configuration>/i \
 
 
 
-# === Section 10: Modify the yarn-site.xml file ===
+# === Section 9: Modify the yarn-site.xml file ===
 
 # add all the below properties to the configuration section of the yarn-site.xml file
 sed -i "/<\/configuration>/i \n\
@@ -162,17 +163,17 @@ sed -i "/<\/configuration>/i \n\
   </property>" /home/${username}/hadoop/etc/hadoop/yarn-site.xml
 
 
-# === Section 11: Modify the masters and slaves files ===
+# === Section 10: Create the masters and workers files. ===
 
 echo "$hadoop_master_hostname" > /home/${username}/hadoop/etc/hadoop/masters
 echo "$hadoop_slave_hostname" > /home/${username}/hadoop/etc/hadoop/workers
 
 
-# === Section 12: Create needed folders and grant permissions to the hadoop user (which will be running hadoop commands). ===
+# === Section 11: Create needed folders and grant permissions for them to the Hadoop user (which will be running Hadoop commands). ===
 
-# Hadoop will be using the hadoop user in order to modify files in the below folders. That's why we need to create them
-# and grant proper permissions to that hadoop user.
-mkdir -p /home/${username}/hadoop/logs # folder needed for hadoop logs
+# Hadoop will be using the Hadoop user in order to modify files in the below folders. That's why we need to create them
+# and grant proper permissions to that Hadoop user.
+mkdir -p /home/${username}/hadoop/logs # folder needed for Hadoop logs
 mkdir -p /usr/local/hadoop
 # Assign the $username as the owner of both folders so that user can create new folders there
 chown -R ${username}:${username} /home/${username}/hadoop

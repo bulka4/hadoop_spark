@@ -11,7 +11,7 @@ module "networks" {
   resource_group_location = module.resource_group.location
 }
 
-# Generate ssh keys for connecting from our local computer to both VMs. Save the private key on our
+# Generate ssh keys for connecting from our local computer to both VMs. The private key will be saved on our
 # local computer at the path specified by the ssh_path.
 module "ssh_1"{
   source = "./modules/ssh"
@@ -20,8 +20,8 @@ module "ssh_1"{
   ssh_path = var.ssh_path
 }
 
-# Generate SSH keys for communication between created VMs. Private key will be saved on one VM (vm_1) and the public key
-# will be saved on the another VM (vm_2) by executing bash scripts on them.
+# Generate SSH keys for communication between created VMs. Private key will be saved on one VM (vm_1, master node) 
+# and the public key will be added to the authorized keys on both VMs (vm_1 and vm_2).
 module "ssh_2" {
   source = "./modules/ssh"
   resource_group_id = module.resource_group.id
@@ -46,7 +46,7 @@ module "linux_vm_1" {
   subnet_id = module.networks.subnet_id
   nsg_id = module.networks.nsg_id
 
-  username = var.vm_username
+  username = var.vm_username # username of the user which will be created on the VM (That is Hadoop user which will be executing Hadoop commands)
   public_key = module.ssh_1.public_key # Public SSH key for connecting to that VM from our local computer.
 
   storage_account_uri = module.storage_account.primary_blob_endpoint
@@ -64,8 +64,8 @@ module "linux_vm_2" {
   subnet_id = module.networks.subnet_id
   nsg_id = module.networks.nsg_id
 
-  username = var.vm_username
-  public_key = module.ssh_1.public_key
+  username = var.vm_username # username of the user which will be created on the VM (That is Hadoop user which will be executing Hadoop commands)
+  public_key = module.ssh_1.public_key # Public SSH key for connecting to that VM from our local computer.
 
   storage_account_uri = module.storage_account.primary_blob_endpoint
 }
@@ -82,10 +82,11 @@ locals {
   ]
 }
 
-# Execute bash scripts on the created VMs using the azurerm_virtual_machine_extension resource which uses Azure VM Extension.
+# Execute bash scripts on the created VMs in order to configure Hadoop. For that we are using the azurerm_virtual_machine_extension
+# resource which uses the Azure VM Extension.
 
-# Save the private SSH key on the VM1, add the public SSH key to the authoriezed_keys and configure Hadoop files.
-# VM1 needs to be able to connect to the localhost and to the VM2 through SSH.
+# Configure the VM1 by executing a bash script which will set up a passwordless SSH connection from VM1 to VM2
+# and configure Hadoop files.
 resource "azurerm_virtual_machine_extension" "vm1_configure_hadoop" {
   name                 = "vm1_configure_hadoop"
   virtual_machine_id   = module.linux_vm_1.vm_id
@@ -104,7 +105,9 @@ resource "azurerm_virtual_machine_extension" "vm1_configure_hadoop" {
   })
 }
 
-# Save the public SSH key on the VM2 and edit etc/hosts file.
+
+# Configure the VM1 by executing a bash script which will set up a passwordless SSH connection from VM1 to VM2
+# and configure Hadoop files.
 resource "azurerm_virtual_machine_extension" "vm2_configure_hadoop" {
   name                 = "vm2_configure_hadoop"
   virtual_machine_id   = module.linux_vm_2.vm_id

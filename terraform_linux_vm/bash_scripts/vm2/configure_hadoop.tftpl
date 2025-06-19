@@ -4,7 +4,7 @@
 # We are using here variables provided by the templatefile Terraform function:
 # - username
 # - hostnames
-# - hosts_entries
+# - host_entries
 # - ssh_public_key
 
 
@@ -13,13 +13,13 @@ hadoop_master_hostname=$${hostnames[0]}
 hadoop_slave_hostname=$${hostnames[1]}
 
 
-# === Section 1: Assign given hosts names to the given IP addresses. ===
+# === Section 1: Assign given hostnames to the private IP addresses of both VMs. ===
 
 HOSTS_FILE="/etc/hosts"
 
 echo "Adding entries to $HOSTS_FILE..."
 
-# Entries to add to the /etc/hosts, that is lines mapping hosts names to IP addresses.
+# Entries to add to the /etc/hosts, that is lines mapping hostnames to IP addresses.
 hosts_entries=( %{ for entry in host_entries ~} "${entry}" %{ endfor ~} )
 
 for entry in "$${hosts_entries[@]}"; do
@@ -27,6 +27,7 @@ for entry in "$${hosts_entries[@]}"; do
   if grep -q "$entry" "$HOSTS_FILE"; then
     echo "Entry '$entry' already exists. Skipping."
   else
+    # add entry to the hosts file
     echo "$entry" >> "$HOSTS_FILE"
     echo "Added: $entry"
   fi
@@ -40,14 +41,13 @@ echo "Done."
 
 mkdir -p /home/${username}/.ssh # Create the .ssh directory if it doesn't exists
 chmod 700 /home/${username}/.ssh # Set correct permissions
+chown -R ${username}:${username} /home/${username}/.ssh # Assign the ${username} user as the owner of the .ssh folder.
 
 AUTHORIZED_KEYS="/home/${username}/.ssh/authorized_keys"
 
-echo "${ssh_public_key}" >> "$AUTHORIZED_KEYS"
+echo "${ssh_public_key}" >> "$AUTHORIZED_KEYS" # Add the SSH public key to the authorized keys.
 
-chmod 600 "$AUTHORIZED_KEYS" # Set correct permissions
-# Assign the ${username} user as the owner of the .ssh folder and all the files inside of it.
-chown -R ${username}:${username} /home/${username}/.ssh
+chmod 600 "$AUTHORIZED_KEYS" # Set correct permissions for the file with authorized keys.
 
 echo "SSH public key added to authorized_keys."
 
@@ -64,7 +64,7 @@ curl -L https://archive.apache.org/dist/hadoop/common/hadoop-3.1.2/hadoop-3.1.2.
 mv /home/${username}/hadoop-3.1.2 /home/${username}/hadoop
 
 
-# === Section 5: Modify the .bashrc file ===
+# === Section 5: Modify the .bashrc file. We will define there environment variables needed for Hadoop. ===
 
 # add all the below lines to the .bashrc file
 cat << 'EOF' >> /home/${username}/.bashrc
@@ -77,7 +77,7 @@ export HDFS_HOME=$${HADOOP_HOME}
 EOF
 
 
-# === Section 6: Modify the hadoop-env.sh and yarn-env.sh files. Add value for the JAVA_HOME environment variable
+# === Section 6: Modify the hadoop-env.sh and yarn-env.sh files. Add value for the JAVA_HOME environment variable. ===
 
 echo "export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64" >> /home/${username}/hadoop/etc/hadoop/hadoop-env.sh
 echo "export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64" >> /home/${username}/hadoop/etc/hadoop/yarn-env.sh
@@ -89,6 +89,7 @@ echo "export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64" >> /home/${username}/h
 
 # We are using here syntax: 
 # > sed -i '/pattern/i sentence' file_path
+# We have here 3 arguments: 'pattern', 'sentence' and 'file_path'.
 # It is finding a string matching the 'pattern' argument in the file at the path specified by the file_path. Then it 
 # inserts a string specified by the 'sentence' argument right before that found matched string. So in that case 
 # we are finding the '</configuration>' string in the /home/${username}/hadoop/etc/hadoop/core-site.xml file 
@@ -111,7 +112,7 @@ sed -i "/<\/configuration>/i \
       <value>2</value>\n\
     </property>\n\
   \n\
-  <!-- DataNode directory. This is set up only on a Slave Node. -->\n\
+  <!-- DataNode directory. This is set up only on nodes (the Slave Node in this case) where we will be running DataNodes. -->\n\
   <property>\n\
     <name>dfs.datanode.data.dir</name>\n\
     <value>file:///home/${username}/hdfs/datanode</value>\n\
@@ -119,7 +120,7 @@ sed -i "/<\/configuration>/i \
 
 
 
-# === Section 10: Modify the yarn-site.xml file ===
+# === Section 9: Modify the yarn-site.xml file ===
 
 # add all the below properties to the configuration section of the yarn-site.xml file
 sed -i "/<\/configuration>/i \n\
@@ -154,25 +155,14 @@ sed -i "/<\/configuration>/i \n\
   </property>" /home/${username}/hadoop/etc/hadoop/yarn-site.xml
 
 
-# === Section 11: Create folders needed and grant permissions to the hadoop user (which will be running hadoop commands). ===
+# === Section 10: Create folders needed and grant permissions to the Hadoop user (which will be running Hadoop commands). ===
 
-# Hadoop will be using the hadoop user in order to modify files in the below folders. That's why we need to create them
-# and grant proper permissions to that hadoop user.
+# Hadoop will be using the Hadoop user in order to modify files in the below folders. That's why we need to create them
+# and grant proper permissions to that Hadoop user.
 mkdir /home/${username}/hdfs
 mkdir /home/${username}/hdfs/datanode # folder path specified in the hdfs-site.xml configuration
-mkdir -p /home/${username}/hadoop/logs # folder needed for hadoop logs
+mkdir -p /home/${username}/hadoop/logs # folder needed for Hadoop logs
 
 chown -R ${username}:${username} /home/${username}/hdfs
 chmod -R 700 /home/${username}/hdfs
 chown -R ${username}:${username} /home/${username}/hadoop
-
-
-
-
-# # === Section 12: Edit the .profile file (I am not sure if that is necessary.) ===
-
-# cat << 'EOF' >> /home/${username}/.profile
-# export HADOOP_HOME="/home/${username}/hadoop"
-# export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
-# export PATH=$PATH:$JAVA_HOME/bin:$HADOOP_HOME/bin:$HADOOP_HOME/sbin
-# EOF
