@@ -1,0 +1,179 @@
+#!/bin/bash
+
+# That script will be executed on a VM as a root user.
+# We are using here variables provided by the templatefile Terraform function:
+# - username
+# - hostnames
+# - hosts_entries
+# - ssh_private_key - SSH key used for connecting from VM1 to VM2
+# - ssh_public_key - SSH key used for connecting from VM1 to VM2
+
+hostnames=( %{ for entry in hostnames ~} "${entry}" %{ endfor ~} )
+hadoop_master_hostname=$${hostnames[0]}
+hadoop_slave_hostname=$${hostnames[1]}
+
+
+# === Section 1: Assign given hosts names to the given IP addresses. ===
+
+HOSTS_FILE="/etc/hosts"
+
+echo "Adding entries to $HOSTS_FILE..."
+
+# Entries to add to the /etc/hosts, that is lines mapping hosts names to IP addresses.
+hosts_entries=( %{ for entry in host_entries ~} "${entry}" %{ endfor ~} )
+
+for entry in "$${hosts_entries[@]}"; do
+  # Check if entry already exists
+  if grep -q "$entry" "$HOSTS_FILE"; then
+    echo "Entry '$entry' already exists. Skipping."
+  else
+    echo "$entry" >> "$HOSTS_FILE"
+    echo "Added: $entry"
+  fi
+done
+
+echo "Done."
+
+
+
+# === Section 2: Saving a SSH private key which will be used for connecting to the VM2 ===
+
+mkdir -p /home/${username}/.ssh # Create the .ssh directory if it doesn't exists
+chmod 700 /home/${username}/.ssh # Set correct permissions
+
+# File to store the private key
+KEY_FILE="/home/${username}/.ssh/id_rsa"
+
+# Create the file and write the key
+echo "Creating SSH key file..."
+echo "${ssh_private_key}" >> "$KEY_FILE"
+
+chmod 600 "$KEY_FILE" # Set correct permissions
+# Assign the ${username} user as the owner of the .ssh folder and all the files inside of it.
+chown -R ${username}:${username} /home/${username}/.ssh
+
+echo "SSH private key saved to $KEY_FILE with restricted permissions."
+
+
+# === Section 3: Adding a SSH public key to authorized_keys so Hadoop can connect through SSH to the localhost ===
+echo "${ssh_public_key}" >> /home/${username}/.ssh/authorized_keys
+
+
+# === Section 3: Install Java ===
+
+sudo apt-get update
+sudo apt-get install openjdk-8-jdk -y
+
+
+# === Section 4: Download hadoop and extract it to the /home/${username}/hadoop
+
+sudo apt-get install curl
+curl -L https://archive.apache.org/dist/hadoop/common/hadoop-3.1.2/hadoop-3.1.2.tar.gz | tar -xz -C /home/${username}
+mv /home/${username}/hadoop-3.1.2 /home/${username}/hadoop
+
+
+# === Section 5: Modify the .bashrc file ===
+
+# add all the below lines to the .bashrc file
+cat << 'EOF' >> /home/${username}/.bashrc
+export HADOOP_HOME="/home/${username}/hadoop"
+export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
+export PATH=$PATH:$HADOOP_HOME/bin
+export PATH=$PATH:$HADOOP_HOME/sbin
+export MAPRED_HOME=$${HADOOP_HOME}
+export HDFS_HOME=$${HADOOP_HOME}
+EOF
+
+
+# === Section 6: Modify the hadoop-env.sh and yarn-env.sh files. Add value for the JAVA_HOME environment variable
+
+echo "export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64" >> /home/${username}/hadoop/etc/hadoop/hadoop-env.sh
+echo "export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64" >> /home/${username}/hadoop/etc/hadoop/yarn-env.sh
+
+
+# === Section 7: Modify the core-site.xml file ===
+
+# add all the below properties to the configuration section of the core-site.xml file
+
+# We are using here syntax: 
+# > sed -i '/pattern/i sentence' file_path
+# It is finding a string matching the 'pattern' argument in the file at the path specified by the file_path. Then it 
+# inserts a string specified by the 'sentence' argument right before that found matched string. So in that case 
+# we are finding the '</configuration>' string in the /home/${username}/hadoop/etc/hadoop/core-site.xml file 
+# and inserting all the properties right before it.
+sed -i "/<\/configuration>/i \
+  <!-- URI of the HDFS NameNode -->\n\
+  <property>\n\
+    <name>fs.defaultFS</name>\n\
+    <value>hdfs://$hadoop_master_hostname:9000</value>\n\
+  </property>" /home/${username}/hadoop/etc/hadoop/core-site.xml
+
+
+# === Section 8: Modify the hdfs-site.xml file ===
+
+# add all the below properties to the configuration section of the hdfs-site.xml file
+sed -i "/<\/configuration>/i \
+  <!-- HDFS replication factor -->\n\
+    <property>\n\
+      <name>dfs.replication</name>\n\
+      <value>2</value>\n\
+    </property>\n\
+  \n\
+  <!-- Namenode Directory. This is set up only on a Master Node. -->\n\
+  <property>\n\
+    <name>dfs.namenode.name.dir</name>\n\
+    <value>file:///home/${username}/hdfs/namenode</value>\n\
+  </property>" /home/${username}/hadoop/etc/hadoop/hdfs-site.xml
+
+
+
+# === Section 10: Modify the yarn-site.xml file ===
+
+# add all the below properties to the configuration section of the yarn-site.xml file
+sed -i "/<\/configuration>/i \n\
+  <!-- Resource manager hostname -->\n\
+  <property>\n\
+      <name>yarn.resourcemanager.hostname</name>\n\
+      <value>$hadoop_master_hostname</value>\n\
+  </property>\n\
+  \n\
+  <!-- Define where local data should be stored for NodeManager -->\n\
+  <property>\n\
+      <name>yarn.nodemanager.local-dirs</name>\n\
+      <value>/home/${username}/hadoop/yarn/local</value>\n\
+  </property>\n\
+  \n\
+  <!-- Define log directory for containers -->\n\
+  <property>\n\
+      <name>yarn.nodemanager.log-dirs</name>\n\
+      <value>/home/${username}/hadoop/yarn/logs</value>\n\
+  </property>\n\
+  \n\
+  <!-- Use HDFS for auxiliary services like shuffle for MapReduce -->\n\
+  <property>\n\
+      <name>yarn.nodemanager.aux-services</name>\n\
+      <value>mapreduce_shuffle</value>\n\
+  </property>\n\
+  \n\
+  <!-- Auxiliary service class -->\n\
+  <property>\n\
+      <name>yarn.nodemanager.aux-services.mapreduce.shuffle.class</name>\n\
+      <value>org.apache.hadoop.mapred.ShuffleHandler</value>\n\
+  </property>" /home/${username}/hadoop/etc/hadoop/yarn-site.xml
+
+
+# === Section 11: Modify the masters and slaves files ===
+
+echo "$hadoop_master_hostname" > /home/${username}/hadoop/etc/hadoop/masters
+echo "$hadoop_slave_hostname" > /home/${username}/hadoop/etc/hadoop/workers
+
+
+# === Section 12: Create needed folders and grant permissions to the hadoop user (which will be running hadoop commands). ===
+
+# Hadoop will be using the hadoop user in order to modify files in the below folders. That's why we need to create them
+# and grant proper permissions to that hadoop user.
+mkdir -p /home/${username}/hadoop/logs # folder needed for hadoop logs
+mkdir -p /usr/local/hadoop
+# Assign the $username as the owner of both folders so that user can create new folders there
+chown -R ${username}:${username} /home/${username}/hadoop
+chown -R ${username}:${username} /usr/local/hadoop
