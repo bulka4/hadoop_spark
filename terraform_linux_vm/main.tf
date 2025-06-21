@@ -20,8 +20,8 @@ module "ssh_1"{
   ssh_path = var.ssh_path
 }
 
-# Generate SSH keys for communication between created VMs. Private key will be saved on one VM (vm_1, master node) 
-# and the public key will be added to the authorized keys on both VMs (vm_1 and vm_2).
+# Generate SSH keys for communication between created VMs. Private key will be saved on one VM (VM1, master node) 
+# and the public key will be added to the authorized keys on both VMs (VM1 and VM2).
 module "ssh_2" {
   source = "./modules/ssh"
   resource_group_id = module.resource_group.id
@@ -41,7 +41,7 @@ module "linux_vm_1" {
   resource_group_name = module.resource_group.name
   resource_group_location = module.resource_group.location
 
-  vm_name = "vm_1"
+  vm_name = "VM1"
   hostname = var.hostnames[0] # hostname of the Master Node
   subnet_id = module.networks.subnet_id
   nsg_id = module.networks.nsg_id
@@ -59,7 +59,7 @@ module "linux_vm_2" {
   resource_group_name = module.resource_group.name
   resource_group_location = module.resource_group.location
 
-  vm_name = "vm_2"
+  vm_name = "VM2"
   hostname = var.hostnames[1] # hostname of the Slave Node
   subnet_id = module.networks.subnet_id
   nsg_id = module.networks.nsg_id
@@ -101,6 +101,7 @@ resource "azurerm_virtual_machine_extension" "vm1_configure_hadoop" {
       host_entries = local.host_entries
       ssh_private_key = module.ssh_2.private_key
       ssh_public_key = module.ssh_2.public_key
+      jupyter_notebook_password = var.jupyter_notebook_password # password for accessing Jupyter Notebook
     }))
   })
 }

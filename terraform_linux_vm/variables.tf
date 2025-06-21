@@ -10,7 +10,10 @@ variable "resource_group_name" {
 
 variable "vm_username" {
   type        = string
-  description = "The username for the local account that will be created on the new VM. It can be used for connecting to that VM through SSH."
+  description = <<EOT
+    The username for the local account that will be created on the new VM. It can be used for connecting to that VM through SSH.
+    That will be also our Hadoop user (which will be executing Hadoop commands).
+  EOT
   default = "azureadmin"
 }
 
@@ -29,4 +32,10 @@ variable "hostnames" {
       are hosts names of slave nodes.
     EOT
     default = ["hadoopmaster", "hadoopslave-1"]
+}
+
+variable "jupyter_notebook_password" {
+    type = string
+    description = "Password for accessing Jupyter Notebook."
+    default = "admin"
 }

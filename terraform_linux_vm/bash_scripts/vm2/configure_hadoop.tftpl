@@ -51,6 +51,7 @@ chown -R ${username}:${username} /home/${username}/.ssh # Assign the ${username}
 
 echo "SSH public key added to authorized_keys."
 
+
 # === Section 3: Install Java ===
 
 apt-get update
@@ -84,12 +85,12 @@ EOF
 
 # === Section 6: Modify the hadoop-env.sh, yarn-env.sh and spark-env.sh files. Add value for the JAVA_HOME environment variable. ===
 
-echo "export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64" >> $HADOOP_HOME/etc/hadoop/hadoop-env.sh
-echo "export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64" >> $HADOOP_HOME/etc/hadoop/yarn-env.sh
+echo "export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64" >> /home/${username}/hadoop/etc/hadoop/hadoop-env.sh
+echo "export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64" >> /home/${username}/hadoop/etc/hadoop/yarn-env.sh
 
-cp $SPARK_HOME/conf/spark-env.sh.template $SPARK_HOME/conf/spark-env.sh
-echo "export SPARK_WORKER_CORES=12" >> $SPARK_HOME/conf/spark-env.sh
-echo "export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64" >> $SPARK_HOME/conf/spark-env.sh
+cp /home/${username}/spark/conf/spark-env.sh.template /home/${username}/spark/conf/spark-env.sh
+echo "export SPARK_WORKER_CORES=12" >> /home/${username}/spark/conf/spark-env.sh
+echo "export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64" >> /home/${username}/spark/conf/spark-env.sh
 
 
 # === Section 7: Modify the core-site.xml file ===
@@ -101,14 +102,14 @@ echo "export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64" >> $SPARK_HOME/conf/sp
 # We have here 3 arguments: 'pattern', 'sentence' and 'file_path'.
 # It is finding a string matching the 'pattern' argument in the file at the path specified by the file_path. Then it 
 # inserts a string specified by the 'sentence' argument right before that found matched string. So in that case 
-# we are finding the '</configuration>' string in the $HADOOP_HOME/etc/hadoop/core-site.xml file 
+# we are finding the '</configuration>' string in the /home/${username}/hadoop/etc/hadoop/core-site.xml file 
 # and inserting all the properties right before it.
 sed -i "/<\/configuration>/i \
   <!-- URI of the HDFS NameNode -->\n\
   <property>\n\
     <name>fs.defaultFS</name>\n\
     <value>hdfs://$hadoop_master_hostname:9000</value>\n\
-  </property>" $HADOOP_HOME/etc/hadoop/core-site.xml
+  </property>" /home/${username}/hadoop/etc/hadoop/core-site.xml
 
 
 # === Section 8: Modify the hdfs-site.xml file ===
@@ -125,7 +126,7 @@ sed -i "/<\/configuration>/i \
   <property>\n\
     <name>dfs.datanode.data.dir</name>\n\
     <value>file:///home/${username}/hdfs/datanode</value>\n\
-  </property>" $HADOOP_HOME/etc/hadoop/hdfs-site.xml
+  </property>" /home/${username}/hadoop/etc/hadoop/hdfs-site.xml
 
 
 
@@ -142,13 +143,13 @@ sed -i "/<\/configuration>/i \n\
   <!-- Define where local data should be stored for NodeManager -->\n\
   <property>\n\
       <name>yarn.nodemanager.local-dirs</name>\n\
-      <value>$HADOOP_HOME/yarn/local</value>\n\
+      <value>/home/${username}/hadoop/yarn/local</value>\n\
   </property>\n\
   \n\
   <!-- Define log directory for containers -->\n\
   <property>\n\
       <name>yarn.nodemanager.log-dirs</name>\n\
-      <value>$HADOOP_HOME/yarn/logs</value>\n\
+      <value>/home/${username}/hadoop/yarn/logs</value>\n\
   </property>\n\
   \n\
   <!-- Use HDFS for auxiliary services like shuffle for MapReduce -->\n\
@@ -161,7 +162,7 @@ sed -i "/<\/configuration>/i \n\
   <property>\n\
       <name>yarn.nodemanager.aux-services.mapreduce.shuffle.class</name>\n\
       <value>org.apache.hadoop.mapred.ShuffleHandler</value>\n\
-  </property>" $HADOOP_HOME/etc/hadoop/yarn-site.xml
+  </property>" /home/${username}/hadoop/etc/hadoop/yarn-site.xml
 
 
 # === Section 10: Create folders needed and grant permissions to the Hadoop user (which will be running Hadoop commands). ===
@@ -170,8 +171,8 @@ sed -i "/<\/configuration>/i \n\
 # and grant proper permissions to that Hadoop user.
 mkdir /home/${username}/hdfs
 mkdir /home/${username}/hdfs/datanode # folder path specified in the hdfs-site.xml configuration
-mkdir -p $HADOOP_HOME/logs # folder needed for Hadoop logs
+mkdir -p /home/${username}/hadoop/logs # folder needed for Hadoop logs
 
 chown -R ${username}:${username} /home/${username}/hdfs
 chmod -R 700 /home/${username}/hdfs
-chown -R ${username}:${username} $HADOOP_HOME
+chown -R ${username}:${username} /home/${username}/hadoop
