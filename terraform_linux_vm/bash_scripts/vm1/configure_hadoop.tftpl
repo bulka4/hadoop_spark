@@ -83,7 +83,6 @@ cat << 'EOF' >> /home/${username}/.bashrc
 export HADOOP_HOME="/home/${username}/hadoop"
 export SPARK_HOME="/home/${username}/spark"
 export HADOOP_CONF_DIR="$HADOOP_HOME/etc/hadoop" # This is needed in order to use Spark shell using this command: 'spark-shell --master yarn'
-# export YARN_CONF_DIR="
 export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
 export PATH=$PATH:$HADOOP_HOME/bin
 export PATH=$PATH:$HADOOP_HOME/sbin
@@ -206,7 +205,8 @@ echo 'export PATH=$PATH:/home/${username}/.local/bin' >> /home/${username}/.bash
 PATH=$PATH:/home/${username}/.local/bin
 
 pip install notebook # install Jupyter Notebook
-pip install pyspark==3.4.4 findspark # install other needed libraries
+pip install pyspark==3.4.4 # here we need the same version as a version of Spark which we downloaded.
+pip install findspark # install other needed libraries
 
 # Set up a password to the Jupyter Notebook.
 
