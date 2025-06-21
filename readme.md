@@ -19,7 +19,7 @@ In order to destroy all the created resources in Azure we need to run the follow
 >- terraform apply main.destroy.tfplan
 
 ## Starting Hadoop and Spark cluster
-In order to start the Hadoop cluster we need to connect through SSH to the VM1 which acts as a master node and run the following commands:
+In order to start the Hadoop and Spark cluster we need to connect through SSH to the VM1 which acts as a master node and run the following commands:
 - $HADOOP_HOME/bin/hdfs namenode -format # We need to run this only when starting Hadoop cluster for the first time. If we run this later on it will remove all the data from the cluster.
 - $HADOOP_HOME/sbin/start-dfs.sh # Start HDFS
 - $HADOOP_HOME/sbin/start-yarn.sh # Start YARN
@@ -28,7 +28,7 @@ In order to start the Hadoop cluster we need to connect through SSH to the VM1 w
 In order to learn about how to connect to that VM through SSH reference to the 'Connecting to the created VMs from our local computer through SSH' section below in this documentation.
 
 ## Accessing Jupyter Notebook
-Jupyter Notebook will be started on the VM1 by Terraform. To access the Jupyter Notebook from Spark use the URL:
+Jupyter Notebook will be started on the VM1 by executing a bash script by Terraform. To access the Jupyter Notebook from Spark use the URL:
 >public_ip_address_vm_1:8888
 
 Where public_ip_address_vm_1 is the Terraform output. More information about how to get this output is in the 'Terraform outputs' section of this documentation.
