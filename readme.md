@@ -33,6 +33,12 @@ Jupyter Notebook will be started on the VM1 by Terraform. To access the Jupyter 
 
 Where public_ip_address_vm_1 is the Terraform output. More information about how to get this output is in the 'Terraform outputs' section of this documentation.
 
+## Accessing HDFS
+To browse HDFS files we need to use this URL:
+>public_ip_address_vm_1:9870
+
+Where public_ip_address_vm_1 is the Terraform output. More information about how to get this output is in the 'Terraform outputs' section of this documentation.
+
 # Prerequisites
 ## Terraform variables
 We need to specify values for Terraform variables. In order to do that we need to create the terraform.tfvars file which looks like the terraform-draft.tfvars and provide there proper values for all the listed variables.
