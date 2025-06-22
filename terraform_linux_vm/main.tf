@@ -95,7 +95,7 @@ resource "azurerm_virtual_machine_extension" "vm1_configure_hadoop" {
   type_handler_version = "2.0"
 
   protected_settings = jsonencode({
-    script = base64encode(templatefile("bash_scripts/vm1/configure_hadoop.tftpl", {
+    script = base64encode(templatefile("bash_scripts/vm1_configure_hadoop.tftpl", {
       username = var.vm_username
       hostnames = var.hostnames
       host_entries = local.host_entries
@@ -117,7 +117,7 @@ resource "azurerm_virtual_machine_extension" "vm2_configure_hadoop" {
   type_handler_version = "2.0"
 
   protected_settings = jsonencode({
-    script = base64encode(templatefile("bash_scripts/vm2/configure_hadoop.tftpl", {
+    script = base64encode(templatefile("bash_scripts/vm2_configure_hadoop.tftpl", {
       username = var.vm_username
       hostnames = var.hostnames
       host_entries = local.host_entries
