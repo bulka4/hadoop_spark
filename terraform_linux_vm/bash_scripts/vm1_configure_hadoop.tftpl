@@ -1,6 +1,8 @@
 #!/bin/bash
 
 # That script will be executed on a VM as a root user. It will be at first rendered using the Terraform templatefile function.
+# Because of that we need to sometimes escape special characters, more info here: 
+# https://developer.hashicorp.com/terraform/language/expressions/strings
 # We are using here variables provided by that function:
 # - username
 # - hostnames
