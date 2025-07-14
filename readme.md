@@ -56,7 +56,7 @@ Where public_ip_address_vm_1 is the Terraform output. More information about how
 
 # Prerequisites
 ## Terraform variables
-We need to specify values for Terraform variables. In order to do that we need to create the terraform.tfvars file which looks like the terraform-draft.tfvars and provide there proper values for all the listed variables.
+We need to specify values for Terraform variables. In order to do that we need to create the terraform.tfvars file which looks like the terraform-draft.tfvars and provide there proper values for all the listed variables. It is described in that draft file what values to provide.
 
 ## Terraform configuration
 We need to configure properly Terraform on our computer so it can create resources in our Azure subscription, it is described here: [developer.hashicorp.com](https://developer.hashicorp.com/terraform/tutorials/azure-get-started/azure-build).
