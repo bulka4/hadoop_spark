@@ -49,6 +49,8 @@ Jupyter Notebook will be started on the VM1 by executing a bash script by Terraf
 
 Where public_ip_address_vm_1 is the Terraform output. More information about how to get this output is in the 'Terraform outputs' section of this documentation.
 
+We also need to provide a password when logging into Jupyter Notebook. It is specified by the Terraform variable jupyter_notebook_password ('admin' by default).
+
 ## Starting Spark session
 Once we are in the Jupyter Notebook, we can create a Spark session in the following way:
 
