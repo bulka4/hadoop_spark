@@ -52,15 +52,27 @@ Where public_ip_address_vm_1 is the Terraform output. More information about how
 We also need to provide a password when logging into Jupyter Notebook. It is specified by the Terraform variable jupyter_notebook_password ('admin' by default).
 
 ## Starting Spark session
-Once we are in the Jupyter Notebook, we can create a Spark session in the following way:
+Once we are in the Jupyter Notebook, there are two options for starting a Spark session:
 
+Using Spark Standalone mode:
 ```
 from pyspark.sql import SparkSession
 spark = SparkSession.builder \
     .appName("MySparkApp") \
-    .master("spark://hadoopmaster:7077") \ # hadoopmaster in a hostname of the Spark Master Node.
+    .master("spark://hadoopmaster:7077") \
     .getOrCreate()
 ```
+The `master("spark://hadoopmaster:7077")` command specifies that we want to run Spark in the Standalone mode. The 'hadoopmaster' is a hostname of the master node.
+
+Using YARN:
+```
+from pyspark.sql import SparkSession
+spark = SparkSession.builder \
+    .appName("MySparkApp") \
+    .master("yarn") \
+    .getOrCreate()
+```
+The `master("yarn")` command specifies that we want to use YARN.
 
 ## Accessing HDFS
 To browse HDFS files we need to use this URL:

@@ -233,11 +233,16 @@ JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
 
 # Start the Jupyter Notebook. The below command will start the Jupyter Notebook, run it in the background and it will
 # continue running even after the current shell session ends. Breakdown of the command:
-# 1) sudo -u ${username} bash -c "command" -> Run a command as the 'username' user. Recommended for security reasons.
-# 2) cd /home/${username} -> change the directory before running the command for starting Jupyter. We want Jupyter to run in that folder
+# 1) sudo -u ${username} bash -c "command" -> Run a command (start a Jupyter in our case) as the 'username' user. Recommended for security reasons.
+# 2) export export HADOOP_CONF_DIR=... -> Set up the HADOOP_CONF_DIR environment variable when starting Jupyter so we can start Spark session using YARN.
+# 3) cd /home/${username} -> change the directory before running the command for starting Jupyter. We want Jupyter to run in that folder
 #    so we see that folder conent in the Jupyter website.
-# 2) nohup -> It causes that the process started by the command will be running even after the shell session ends.
-# 3) jupyter notebook --ip=0.0.0.0 --port=8888 --no-browser -> Start the Jupyter Notebook.
-# 4) > /home/${username}/jupyter.log 2>&1 -> Redirect output logs from the process to the /home/${username}/jupyter.log file.
-# 5) & (at the end of the command) -> Run the process in the background.
-sudo -u ${username} bash -c "cd /home/${username} && nohup jupyter notebook --ip=0.0.0.0 --port=8888 --no-browser > /home/${username}/jupyter.log 2>&1 &"
+# 4) nohup -> It causes that the process started by the command will be running even after the shell session ends.
+# 5) jupyter notebook --ip=0.0.0.0 --port=8888 --no-browser -> Start the Jupyter Notebook.
+# 6) > /home/${username}/jupyter.log 2>&1 -> Redirect output logs from the process to the /home/${username}/jupyter.log file.
+# 7) & (at the end of the command) -> Run the process in the background.
+sudo -u ${username} bash -c '
+  export HADOOP_CONF_DIR="/home/${username}/hadoop/etc/hadoop" && 
+  cd /home/${username} && 
+  nohup jupyter notebook --ip=0.0.0.0 --port=8888 --no-browser > /home/${username}/jupyter.log 2>&1 &
+'
